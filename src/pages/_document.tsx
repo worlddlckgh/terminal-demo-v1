@@ -11,7 +11,9 @@ class MyDocument extends Document {
     return (
       <Html>
         <Head>
-        <link rel="shortcut icon" href="/favicon.ico"/>
+          <link rel="shortcut icon" href="/favicon.ico" />
+          {/* eslint-disable @next/next/no-sync-scripts */}
+          <script src="https://jupiter-terminal-git-add-code-generation-wowcats.vercel.app/main-v1.js" data-preload />
         </Head>
         <body>
           <Main />

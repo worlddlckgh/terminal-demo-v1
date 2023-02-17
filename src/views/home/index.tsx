@@ -1,68 +1,111 @@
 // Next, React
-import { FC, useEffect, useState } from 'react';
-import Link from 'next/link';
+import { FC, useEffect, useMemo } from 'react';
+import { createTransferCheckedInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token';
 
 // Wallet
-import { useWallet, useConnection } from '@solana/wallet-adapter-react';
-
-// Components
-import { RequestAirdrop } from '../../components/RequestAirdrop';
-import pkg from '../../../package.json';
+import { useWallet } from '@solana/wallet-adapter-react';
 
 // Store
 import useUserSOLBalanceStore from '../../stores/useUserSOLBalanceStore';
+import { Connection, PublicKey, Transaction } from '@solana/web3.js';
+import { notify } from 'utils/notifications';
 
+// TODO: Fill up your own endpoint
+const endpoint = '';
 export const HomeView: FC = ({ }) => {
   const wallet = useWallet();
-  const { connection } = useConnection();
+  const connection = useMemo(() => new Connection(endpoint), []);
 
   const balance = useUserSOLBalanceStore((s) => s.balance)
   const { getUserSOLBalance } = useUserSOLBalanceStore()
 
   useEffect(() => {
     if (wallet.publicKey) {
-      console.log(wallet.publicKey.toBase58())
       getUserSOLBalance(wallet.publicKey, connection)
     }
   }, [wallet.publicKey, connection, getUserSOLBalance])
 
-  return (
+  async function transferToWallet() {
+    const usdcAta = getAssociatedTokenAddressSync(new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'), wallet.publicKey)
+    const tx = new Transaction().add(
+      createTransferCheckedInstruction(
+        usdcAta, // from (should be a token account)
+        new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'), // mint
+        usdcAta, // to (should be a token account)
+        wallet.publicKey, // from's owner
+        1000, // amount, if your deciamls is 8, send 10^8 for 1 token
+        6 // decimals
+      )
+    );
+    const txid = await wallet.sendTransaction(tx, connection);
+    notify({
+      type: 'success',
+      message: `Payment sent!`,
+      description: `Successfully purchased something.`,
+      txid: txid
+    });
+  }
 
+  return (
     <div className="md:hero mx-auto p-4">
       <div className="md:hero-content flex flex-col">
-        <div className='mt-6'>
-        <div className='text-sm font-normal align-bottom text-right text-slate-600 mt-4'>v{pkg.version}</div>
-        <h1 className="text-center text-5xl md:pl-12 font-bold text-transparent bg-clip-text bg-gradient-to-br from-indigo-500 to-fuchsia-500 mb-4">
-          Solana Next
-        </h1>
-        </div>
-        <h4 className="md:w-full text-2x1 md:text-4xl text-center text-slate-300 my-2">
-          <p>Unleash the full power of blockchain with Solana and Next.js 13.</p>
-          <p className='text-slate-500 text-2x1 leading-relaxed'>Full-stack Solana applications made easy.</p>
-        </h4>
-        <div className="relative group">
-          <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 to-indigo-500 rounded-lg blur opacity-40 animate-tilt"></div>
-          <div className="max-w-md mx-auto mockup-code bg-primary border-2 border-[#5252529f] p-6 px-10 my-2">
-            <pre data-prefix=">">
-              <code className="truncate">{`npx create-solana-dapp <dapp-name>`} </code>
-            </pre>
-          </div>
-        </div>
-        <div className="flex flex-col mt-2">
-          <RequestAirdrop />
-          <h4 className="md:w-full text-2xl text-slate-300 my-2">
-          {wallet &&
-          <div className="flex flex-row justify-center">
-            <div>
-              {(balance || 0).toLocaleString()}
-              </div>
-              <div className='text-slate-600 ml-2'>
-                SOL
-              </div>
-          </div>
+        <div
+          id="integrated-terminal"
+          className='mt-4 mb-20 bg-white/10 rounded-md w-[400px]'
+        />
+
+        {/* How to add Fee */}
+        <button
+          className='rounded-md bg-blue-500 text-white px-4 py-2 hover:bg-blue-600'
+          onClick={() =>
+            (window as any).Jupiter.init({
+              "displayMode": "integrated",
+              "integratedTargetId": "integrated-terminal",
+              "formProps": {
+                "swapMode": "ExactOut"
+              },
+              onSuccess: () => {
+
+              },
+              passthroughWallet: wallet,
+              endpoint,
+              platformFeeAndAccounts: {
+                feeBps: 20,
+                feeAccounts: new Map([
+                  ['EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', new PublicKey('2QDFyBkhaGLLM5wzLgWGbuQaDPi2w4MK45sBnGz2hR1v')]
+                ])
+              }
+            })
           }
-          </h4>
-        </div>
+        >
+          Launch Integrated
+        </button>
+
+        {/* How to Add payment after swap */}
+        <button
+          className='rounded-md bg-blue-500 text-white px-4 py-2 hover:bg-blue-600'
+          onClick={() =>
+            (window as any).Jupiter.init({
+              "displayMode": "integrated",
+              "integratedTargetId": "integrated-terminal",
+              "formProps": {
+                "initialInputMint": 'So11111111111111111111111111111111111111112',
+                "initialOutputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+                "fixedOutputMint": true,
+                "initialAmount": "100000",
+                "fixedAmount": true,
+                "swapMode": "ExactOut"
+              },
+              onSuccess: () => {
+                transferToWallet();
+              },
+              passthroughWallet: wallet,
+              endpoint,
+            })
+          }
+        >
+          Payment after swap
+        </button>
       </div>
     </div>
   );
